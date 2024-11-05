@@ -1,0 +1,34 @@
+{
+	"version": "2.0.0",
+	"tasks": [
+		{
+			"label": "cmake",
+			"type": "shell",
+			"command": "cmake",
+			"args": [
+				"../",
+				"-DCMAKE_BUILD_TYPE=Debug",
+				"-DLLVM_DIR=/usr/lib/llvm-10",
+			],
+			"options": {
+				"cwd": "/home/zengyong/compiler_homework/first/ast-interpreter/build"
+			},
+		},
+		{
+			"label": "make",
+			"type": "shell",
+			"command": "make",
+			"args": [],
+			"options": {
+				"cwd": "/home/zengyong/compiler_homework/first/ast-interpreter/build"
+			},
+		},
+		{
+			"label": "build",
+			"dependsOn": [
+				"cmake",
+				"make"
+			]
+		},
+	],
+}
