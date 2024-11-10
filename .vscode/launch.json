@@ -5,11 +5,11 @@
             "name": "g++ - Build and debug active file",
             "type": "cppdbg",
             "request": "launch",
-            "program": "/home/zengyong/compiler_homework/first/ast-interpreter/build/ast-interpreter",
+            "program": "/home/zengyong/compiler_homework/assign2/build/llvmassignment",
             "args": [
-                "`cat ../test/test15.c`"
+                "../assign2-tests/test00.bc"
             ],
-            "stopAtEntry": false,
+            "stopAtEntry": false ,
             "cwd": "${fileDirname}",
             "environment": [],
             "externalConsole": false,

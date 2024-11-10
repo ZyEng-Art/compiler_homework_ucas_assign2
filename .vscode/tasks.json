@@ -8,10 +8,10 @@
 			"args": [
 				"../",
 				"-DCMAKE_BUILD_TYPE=Debug",
-				"-DLLVM_DIR=/usr/lib/llvm-10",
+				"-DLLVM_DIR=/usr/lib/llvm10ra",
 			],
 			"options": {
-				"cwd": "/home/zengyong/compiler_homework/first/ast-interpreter/build"
+				"cwd": "/home/zengyong/compiler_homework/assign2/build"
 			},
 		},
 		{
@@ -20,7 +20,7 @@
 			"command": "make",
 			"args": [],
 			"options": {
-				"cwd": "/home/zengyong/compiler_homework/first/ast-interpreter/build"
+				"cwd": "/home/zengyong/compiler_homework/assign2/build"
 			},
 		},
 		{

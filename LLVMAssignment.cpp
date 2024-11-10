@@ -71,6 +71,7 @@ struct FuncPtrPass : public ModulePass {
 
 char FuncPtrPass::ID = 0;
 static RegisterPass<FuncPtrPass> X("funcptrpass", "Print function call instruction");
+// 注册Pass
 
 static cl::opt<std::string>
 InputFilename(cl::Positional,
@@ -80,7 +81,7 @@ InputFilename(cl::Positional,
 
 int main(int argc, char **argv) {
    LLVMContext &Context = getGlobalContext();
-   SMDiagnostic Err;
+   SMDiagnostic Err; // 前端诊断工具
    // Parse the command line to read the Inputfilename
    cl::ParseCommandLineOptions(argc, argv,
                               "FuncPtrPass \n My first LLVM too which does not do much.\n");
