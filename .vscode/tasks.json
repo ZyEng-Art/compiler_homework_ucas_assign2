@@ -23,11 +23,17 @@
 				"cwd": "/home/zengyong/compiler_homework/assign2/build"
 			},
 		},
+		// {
+		// 	"label": "generate",
+		// 	"type": "shell",
+		// 	"command": "clang -emit-llvm -c -O0 -g3 assign2-tests/test00.c -o assign2-tests/test00.bc"
+		// },
 		{
 			"label": "build",
 			"dependsOn": [
 				"cmake",
-				"make"
+				"make",
+				// "generate"
 			]
 		},
 	],

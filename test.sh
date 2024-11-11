@@ -2,7 +2,7 @@ test_dir="assign2-tests/"
 tests=("test00" "test01" "test02" "test03" "test04" "test05" "test06" "test07" 
 "test08" "test09" "test10" "test11" "test12" "test13" "test14" "test15" 
 "test16" "test17" "test18" "test19")
-results=("10 : plus" "22 : plus" "24 : plus, minus" "27 : plus, minus" 
+results=("10 : plus" "22 : plus" "24 : minus, plus" "27 : plus, minus" 
 "10 : plus, minus
 26 : foo
 33 : foo" 

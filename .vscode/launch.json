@@ -7,9 +7,9 @@
             "request": "launch",
             "program": "/home/zengyong/compiler_homework/assign2/build/llvmassignment",
             "args": [
-                "../assign2-tests/test00.bc"
+                "/home/zengyong/compiler_homework/assign2/assign2-tests/test00.bc"
             ],
-            "stopAtEntry": false ,
+            "stopAtEntry": false,
             "cwd": "${fileDirname}",
             "environment": [],
             "externalConsole": false,
