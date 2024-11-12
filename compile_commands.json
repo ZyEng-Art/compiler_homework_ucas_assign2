@@ -1,0 +1,19 @@
+[
+{
+  "directory": "/home/zengyong/compiler_homework/assign2/build",
+  "command": "/bin/g++   -I/usr/lib/llvm10ra/include -I../include  -g   -o CMakeFiles/llvmassignment.dir/src/LLVMAssignment.cpp.o -c /home/zengyong/compiler_homework/assign2/src/LLVMAssignment.cpp",
+  "file": "/home/zengyong/compiler_homework/assign2/src/LLVMAssignment.cpp"
+},
+
+{
+  "directory": "/home/zengyong/compiler_homework/assign2/build",
+  "command": "/bin/g++   -I/usr/lib/llvm10ra/include -I../include  -g   -o CMakeFiles/llvmassignment.dir/src/call_graph.cpp.o -c /home/zengyong/compiler_homework/assign2/src/call_graph.cpp",
+  "file": "/home/zengyong/compiler_homework/assign2/src/call_graph.cpp"
+},
+
+{
+  "directory": "/home/zengyong/compiler_homework/assign2/build",
+  "command": "/bin/g++   -I/usr/lib/llvm10ra/include -I../include  -g   -o CMakeFiles/llvmassignment.dir/src/func_ptr_pass.cpp.o -c /home/zengyong/compiler_homework/assign2/src/func_ptr_pass.cpp",
+  "file": "/home/zengyong/compiler_homework/assign2/src/func_ptr_pass.cpp"
+}
+]
