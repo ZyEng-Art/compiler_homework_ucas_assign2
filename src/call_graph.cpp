@@ -91,6 +91,7 @@ static void reverse_post_order(std::unordered_map<BasicBlock *, bool> &visited, 
     rpo_list.push_back(entry);
 }
 static std::map<llvm::Value *, std::set<llvm::Function *>> PVVs;
+static std::map<CallFunc *, std::set<llvm::Function *>> RETs;
 static bool insert_may_value(Value *var, Value *value) {
     if (auto *func = llvm::dyn_cast<llvm::Function>(value)) {
         if (PVVs[var].find(func) == PVVs[var].end()) {
@@ -105,6 +106,24 @@ static bool insert_may_value(Value *var, Value *value) {
     }
     return false;
 }
+static bool insert_may_value(Value *var, CallFunc *callee) {
+    assert(RETs.find(callee) != RETs.end());
+    auto old = PVVs[var];
+    PVVs[var].insert(RETs[callee].begin(), RETs[callee].end());
+    return old != PVVs[var];
+}
+
+static bool is_func_ptr(Value *value) {
+    if (llvm::PointerType *ptrType = llvm::dyn_cast<llvm::PointerType>(value->getType())) {
+        // 获取指针类型的元素类型
+        llvm::Type *elementType = ptrType->getElementType();
+
+        // 判断元素类型是否是函数类型
+        return elementType->isFunctionTy();
+    }
+    return false;
+}
+
 static bool deal_inst(Call_Graph &callgraph, CallFunc *callfunc, Instruction *inst) {
     // inst->dump();
     bool change = false;
@@ -119,7 +138,7 @@ static bool deal_inst(Call_Graph &callgraph, CallFunc *callfunc, Instruction *in
 
     if (CallInst *callInst = llvm::dyn_cast<llvm::CallInst>(inst)) {
         if (inst->getDebugLoc().getLine() == 0) return false;
-        assert(!callInst->getType()->isPointerTy()); // 返回值先不是指针
+        // assert(!callInst->getType()->isPointerTy()); // 返回值先不是指针
         Value *called = callInst->getCalledOperand();
         CallNode *callnode = new CallNode(callfunc, inst);
         if (auto *func = llvm::dyn_cast<llvm::Function>(called)) {
@@ -132,6 +151,11 @@ static bool deal_inst(Call_Graph &callgraph, CallFunc *callfunc, Instruction *in
             }
         }
         callfunc->add_call_node(callnode);
+        if (is_func_ptr(callInst)) {
+            for (auto &callee : callnode->get_callees()) {
+                change |= insert_may_value(callInst, callee);
+            }
+        }
         // callInst->dump();
         for (unsigned i = 0; i < callInst->getNumArgOperands(); i++) {
             Value *arg = callInst->getArgOperand(i);
@@ -147,6 +171,16 @@ static bool deal_inst(Call_Graph &callgraph, CallFunc *callfunc, Instruction *in
         }
         return change;
     }
+
+    if (ReturnInst *returnInst = dyn_cast<ReturnInst>(inst)) {
+        Value *ret = returnInst->getReturnValue();
+        if (is_func_ptr(ret)) {
+            if (RETs[callfunc] == PVVs[ret])
+                return false;
+            RETs[callfunc] = PVVs[ret];
+            return true;
+        }
+    }
 }
 
 bool Build_Call_Graph_Pass::runOnModule(Module &M) {
@@ -154,6 +188,7 @@ bool Build_Call_Graph_Pass::runOnModule(Module &M) {
     for (auto &F : M) {
         if (F.getName().startswith("llvm.dbg")) continue;
         CallFunc *callfunc = new CallFunc(&F);
+        RETs[callfunc] = std::set<llvm::Function *>();
         this->call_graph.add_call_func(callfunc);
         std::unordered_map<BasicBlock *, bool> visited;
         reverse_post_order(visited, rpo_list[callfunc], &(F.getEntryBlock()));

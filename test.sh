@@ -21,16 +21,16 @@ results=("10 : plus" "22 : plus" "24 : plus, minus" "27 : plus, minus"
 19 : foo
 35 : clever"
 "15 : foo
-16 : plus 
+16 : plus
 32 : clever"
 "15 : foo
-16 : plus, minus 
+16 : plus, minus
 32 : clever"
 "30 : foo, clever
 31 : plus, minus"
-"24 : foo  
-31 : clever,foo
-32 : plus"
+"24 : foo
+31 : foo, clever
+32 : plus, minus"
 "14 : plus, minus
 24 : foo
 27 : foo")
@@ -44,8 +44,8 @@ do
     clang -emit-llvm -c -O0 -g3 $test_path -o $bc_path
     ./build/llvmassignment $bc_path 2>tmp.txt
     res=$(cat tmp.txt)
-    echo $res
-    echo $expected
+    # echo $res
+    # echo $expected
     if [ "$expected" = "$res" ];then
         echo "* success $test"
     else 
