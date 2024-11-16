@@ -33,9 +33,26 @@ results=("10 : plus" "22 : plus" "24 : plus, minus" "27 : plus, minus"
 32 : plus, minus"
 "14 : plus, minus
 24 : foo
-27 : foo")
+27 : foo"
+"14 : foo
+17 : clever
+24 : clever1
+25 : plus"
+"14 : foo
+17 : clever
+24 : clever1
+25 : plus"
+"14 : foo
+18 : foo, clever
+30 : clever1
+31 : plus"
+"14 : foo
+18 : foo, clever
+24 : foo, clever
+36 : clever1
+37 : plus")
 
-for i in {0..15};
+for i in {0..19};
 do
     test=${tests[$i]}
     expected=${results[$i]}
