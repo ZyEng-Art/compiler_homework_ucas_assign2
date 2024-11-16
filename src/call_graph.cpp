@@ -91,8 +91,8 @@ static void reverse_post_order(std::unordered_map<BasicBlock *, bool> &visited, 
     rpo_list.push_back(entry);
 }
 static std::map<llvm::Value *, std::set<llvm::Function *>> PVVs;
-static std::map<CallFunc *, std::set<llvm::Function *>> RETs;
-static bool insert_may_value(Value *var, Value *value) {
+static std::map<Function *, std::set<llvm::Function *>> RETs;
+static bool insert_may_value1(Value *var, Value *value) {
     if (auto *func = llvm::dyn_cast<llvm::Function>(value)) {
         if (PVVs[var].find(func) == PVVs[var].end()) {
             PVVs[var].insert(func);
@@ -106,13 +106,16 @@ static bool insert_may_value(Value *var, Value *value) {
     }
     return false;
 }
-static bool insert_may_value(Value *var, CallFunc *callee) {
+static bool insert_may_value2(Value *var, Function *callee) {
     assert(RETs.find(callee) != RETs.end());
     auto old = PVVs[var];
     PVVs[var].insert(RETs[callee].begin(), RETs[callee].end());
     return old != PVVs[var];
 }
 
+static bool is_dbg_func(Function *F) {
+    return F->getName().startswith("llvm.dbg");
+}
 static bool is_func_ptr(Value *value) {
     if (llvm::PointerType *ptrType = llvm::dyn_cast<llvm::PointerType>(value->getType())) {
         // 获取指针类型的元素类型
@@ -124,48 +127,44 @@ static bool is_func_ptr(Value *value) {
     return false;
 }
 
-static bool deal_inst(Call_Graph &callgraph, CallFunc *callfunc, Instruction *inst) {
-    // inst->dump();
+static bool deal_inst(Function *callfunc, Instruction *inst) {
     bool change = false;
     if (PHINode *phiInst = llvm::dyn_cast<llvm::PHINode>(inst)) {
         unsigned num = phiInst->getNumIncomingValues();
         for (unsigned i = 0; i < num; i++) {
             Value *op = phiInst->getIncomingValue(i);
-            change |= insert_may_value(phiInst, op);
+            change |= insert_may_value1(phiInst, op);
         }
         return change;
     }
 
     if (CallInst *callInst = llvm::dyn_cast<llvm::CallInst>(inst)) {
         if (inst->getDebugLoc().getLine() == 0) return false;
-        // assert(!callInst->getType()->isPointerTy()); // 返回值先不是指针
+
         Value *called = callInst->getCalledOperand();
-        CallNode *callnode = new CallNode(callfunc, inst);
+        // 更新返回值和当前值
         if (auto *func = llvm::dyn_cast<llvm::Function>(called)) {
-            callnode->add_callee(callgraph.get_callfunc(func));
+            change |= insert_may_value1(called, func);
+            change |= insert_may_value2(callInst, func);
         }
         else {
-            // llvm::errs() << called << "\n";
             for (auto &func : PVVs[called]) {
-                callnode->add_callee(callgraph.get_callfunc(func));
+                change |= insert_may_value2(callInst, func);
             }
         }
-        callfunc->add_call_node(callnode);
-        if (is_func_ptr(callInst)) {
-            for (auto &callee : callnode->get_callees()) {
-                change |= insert_may_value(callInst, callee);
-            }
-        }
-        // callInst->dump();
+        // 更新参数
         for (unsigned i = 0; i < callInst->getNumArgOperands(); i++) {
             Value *arg = callInst->getArgOperand(i);
             if (arg->getType()->isPointerTy() && arg->getType()->getPointerElementType()->isFunctionTy()) {
-                for (auto &callee : callnode->get_callees()) {
-                    Argument *argument = callee->get_func()->getArg(i);
-                    // arg->dump();
-                    // argument->dump();
-                    // llvm::errs() << argument << "\n";
-                    change |= insert_may_value(argument, arg);
+                if (auto *func = llvm::dyn_cast<llvm::Function>(called)) {
+                    Argument *argument = func->getArg(i);
+                    change |= insert_may_value1(argument, arg);
+                }
+                else {
+                    for (auto &callee : PVVs[called]) {
+                        Argument *argument = callee->getArg(i);
+                        change |= insert_may_value1(argument, arg);
+                    }
                 }
             }
         }
@@ -181,31 +180,50 @@ static bool deal_inst(Call_Graph &callgraph, CallFunc *callfunc, Instruction *in
             return true;
         }
     }
+    return false;
 }
 
 bool Build_Call_Graph_Pass::runOnModule(Module &M) {
-    std::map<CallFunc *, std::vector<BasicBlock *>> rpo_list;
+    std::map<Function *, std::vector<BasicBlock *>> rpo_list;
     for (auto &F : M) {
         if (F.getName().startswith("llvm.dbg")) continue;
-        CallFunc *callfunc = new CallFunc(&F);
-        RETs[callfunc] = std::set<llvm::Function *>();
-        this->call_graph.add_call_func(callfunc);
+        RETs[&F] = std::set<llvm::Function *>();
         std::unordered_map<BasicBlock *, bool> visited;
-        reverse_post_order(visited, rpo_list[callfunc], &(F.getEntryBlock()));
+        reverse_post_order(visited, rpo_list[&F], &(F.getEntryBlock()));
     }
     bool change = true;
     while (change) {
         change = false;
         for (auto it = M.rbegin(); it != M.rend(); it++) {
             Function &F = *it;
-            if (F.getName().startswith("llvm.dbg")) continue;
-            CallFunc *callfunc = this->call_graph.get_callfunc(&F);
-            // F.dump();
-            for (auto iter = rpo_list[callfunc].rbegin(); iter != rpo_list[callfunc].rend(); iter++) {
+            if (is_dbg_func(&F)) continue;
+            for (auto iter = rpo_list[&F].rbegin(); iter != rpo_list[&F].rend(); iter++) {
                 BasicBlock *BB = *iter;
-                // BB->dump();
                 for (auto &I : BB->getInstList()) {
-                    change |= deal_inst(this->call_graph, callfunc, &I);
+                    change |= deal_inst(&F, &I);
+                }
+            }
+        }
+    }
+
+    for (auto &F : M) {
+        if (is_dbg_func(&F)) continue;
+        CallFunc *callfunc = new CallFunc(&F);
+        this->call_graph.add_call_func(callfunc);
+    }
+
+    for (auto &F : M) {
+        if (is_dbg_func(&F)) continue;
+        CallFunc *callfunc = this->call_graph.get_callfunc(&F);
+        for (auto &BB : F) {
+            for (auto &I : BB.getInstList()) {
+                if (CallInst *callInst = llvm::dyn_cast<llvm::CallInst>(&I)) {
+                    if (I.getDebugLoc().getLine() == 0) continue;
+                    CallNode *callnode = new CallNode(callfunc, callInst);
+                    for (auto &callee : PVVs[callInst->getCalledOperand()]) {
+                        callnode->add_callee(this->call_graph.get_callfunc(callee));
+                    }
+                    callfunc->add_call_node(callnode);
                 }
             }
         }

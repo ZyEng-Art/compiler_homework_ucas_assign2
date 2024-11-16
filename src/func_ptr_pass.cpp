@@ -16,15 +16,8 @@ bool FuncPtrPass::can_execuate(llvm::PHINode phiInstr, llvm::Value *operand, llv
     return true;
 }
 
-void FuncPtrPass::analysis(llvm::CallInst *callInst) {
-}
 bool FuncPtrPass::runOnModule(Module &M) {
-    // errs() << "Hello: ";
-    // errs().write_escaped(M.getName()) << '\n';
-    // M.dump();
-    // errs() << "------------------------------\n";
     Call_Graph &call_graph = getAnalysis<Build_Call_Graph_Pass>().call_graph;
-    // call_graph.dump();
     // 遍历模块中的每个函数
     for (auto &F : M) {
         if (F.getName().startswith("llvm.dbg")) continue;
