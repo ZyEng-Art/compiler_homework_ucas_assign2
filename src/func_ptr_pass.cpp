@@ -16,36 +16,159 @@ bool FuncPtrPass::can_execuate(llvm::PHINode phiInstr, llvm::Value *operand, llv
     return true;
 }
 
-bool FuncPtrPass::runOnModule(Module &M) {
-    Call_Graph &call_graph = getAnalysis<Build_Call_Graph_Pass>().call_graph;
-    // 遍历模块中的每个函数
-    for (auto &F : M) {
-        if (F.getName().startswith("llvm.dbg")) continue;
-        CallFunc *callfunc = call_graph.get_callfunc(&F);
-        for (auto pair : callfunc->get_call_nodes()) {
-            Instruction *instr = pair.first;
-            llvm::errs() << instr->getDebugLoc().getLine() << " :";
-            bool first = true;
-            for (CallFunc *callee : pair.second->get_callees()) {
-                if (first) {
-                    llvm::errs() << " ";
-                    first = false;
+#include <llvm/ADT/PostOrderIterator.h>
+#include <llvm/IR/CFG.h>
+#include <unordered_map>
+static void reverse_post_order(std::unordered_map<BasicBlock *, bool> &visited, std::vector<BasicBlock *> &rpo_list, BasicBlock *entry) {
+    if (visited.find(entry) != visited.end()) return;
+    visited[entry] = true;
+    for (auto *succ : successors(entry)) {
+        reverse_post_order(visited, rpo_list, succ);
+    }
+    rpo_list.push_back(entry);
+}
+static std::map<llvm::Value *, std::set<llvm::Function *>> PVVs;
+static std::map<Function *, std::set<llvm::Function *>> RETs;
+static bool insert_may_value1(Value *var, Value *value) {
+    if (auto *func = llvm::dyn_cast<llvm::Function>(value)) {
+        if (PVVs[var].find(func) == PVVs[var].end()) {
+            PVVs[var].insert(func);
+            return true;
+        }
+    }
+    else {
+        auto old = PVVs[var];
+        PVVs[var].insert(PVVs[value].begin(), PVVs[value].end());
+        return old != PVVs[var];
+    }
+    return false;
+}
+static bool insert_may_value2(Value *var, Function *callee) {
+    assert(RETs.find(callee) != RETs.end());
+    auto old = PVVs[var];
+    PVVs[var].insert(RETs[callee].begin(), RETs[callee].end());
+    return old != PVVs[var];
+}
+
+static bool is_dbg_func(Function *F) {
+    return F->getName().startswith("llvm.dbg");
+}
+static bool is_func_ptr(Value *value) {
+    if (llvm::PointerType *ptrType = llvm::dyn_cast<llvm::PointerType>(value->getType())) {
+        // 获取指针类型的元素类型
+        llvm::Type *elementType = ptrType->getElementType();
+
+        // 判断元素类型是否是函数类型
+        return elementType->isFunctionTy();
+    }
+    return false;
+}
+
+static bool deal_inst(Function *callfunc, Instruction *inst) {
+    bool change = false;
+    if (PHINode *phiInst = llvm::dyn_cast<llvm::PHINode>(inst)) {
+        unsigned num = phiInst->getNumIncomingValues();
+        for (unsigned i = 0; i < num; i++) {
+            Value *op = phiInst->getIncomingValue(i);
+            change |= insert_may_value1(phiInst, op);
+        }
+        return change;
+    }
+
+    if (CallInst *callInst = llvm::dyn_cast<llvm::CallInst>(inst)) {
+        if (inst->getDebugLoc().getLine() == 0) return false;
+
+        Value *called = callInst->getCalledOperand();
+        // 更新返回值和当前值
+        if (auto *func = llvm::dyn_cast<llvm::Function>(called)) {
+            change |= insert_may_value1(called, func);
+            change |= insert_may_value2(callInst, func);
+        }
+        else {
+            for (auto &func : PVVs[called]) {
+                change |= insert_may_value2(callInst, func);
+            }
+        }
+        // 更新参数
+        for (unsigned i = 0; i < callInst->getNumArgOperands(); i++) {
+            Value *arg = callInst->getArgOperand(i);
+            if (arg->getType()->isPointerTy() && arg->getType()->getPointerElementType()->isFunctionTy()) {
+                if (auto *func = llvm::dyn_cast<llvm::Function>(called)) {
+                    Argument *argument = func->getArg(i);
+                    change |= insert_may_value1(argument, arg);
                 }
                 else {
-                    llvm::errs() << ", ";
+                    for (auto &callee : PVVs[called]) {
+                        Argument *argument = callee->getArg(i);
+                        change |= insert_may_value1(argument, arg);
+                    }
                 }
-                llvm::errs() << callee->get_func()->getName();
             }
-            llvm::errs() << "\n";
+        }
+        return change;
+    }
+
+    if (ReturnInst *returnInst = dyn_cast<ReturnInst>(inst)) {
+        Value *ret = returnInst->getReturnValue();
+        if (is_func_ptr(ret)) {
+            if (RETs[callfunc] == PVVs[ret])
+                return false;
+            RETs[callfunc] = PVVs[ret];
+            return true;
         }
     }
     return false;
 }
 
-void FuncPtrPass::getAnalysisUsage(AnalysisUsage &AU) const {
-    AU.addRequired<Build_Call_Graph_Pass>();
-    AU.setPreservesAll();
+bool FuncPtrPass::runOnModule(Module &M) {
+    std::map<Function *, std::vector<BasicBlock *>> rpo_list;
+    for (auto &F : M) {
+        if (F.getName().startswith("llvm.dbg")) continue;
+        RETs[&F] = std::set<llvm::Function *>();
+        std::unordered_map<BasicBlock *, bool> visited;
+        reverse_post_order(visited, rpo_list[&F], &(F.getEntryBlock()));
+    }
+    bool change = true;
+    while (change) {
+        change = false;
+        for (auto it = M.rbegin(); it != M.rend(); it++) {
+            Function &F = *it;
+            if (is_dbg_func(&F)) continue;
+            for (auto iter = rpo_list[&F].rbegin(); iter != rpo_list[&F].rend(); iter++) {
+                BasicBlock *BB = *iter;
+                for (auto &I : BB->getInstList()) {
+                    change |= deal_inst(&F, &I);
+                }
+            }
+        }
+    }
+
+    for (auto &F : M) {
+        if (is_dbg_func(&F)) continue;
+        for (auto &BB : F) {
+            for (auto &I : BB.getInstList()) {
+                if (CallInst *callInst = llvm::dyn_cast<llvm::CallInst>(&I)) {
+                    if (I.getDebugLoc().getLine() == 0) continue;
+                    bool first = true;
+                    llvm::errs() << callInst->getDebugLoc().getLine() << " :";
+                    for (auto &callee : PVVs[callInst->getCalledOperand()]) {
+                        if (first) {
+                            llvm::errs() << " ";
+                            first = false;
+                        }
+                        else {
+                            llvm::errs() << ", ";
+                        }
+                        llvm::errs() << callee->getName();
+                    }
+                    llvm::errs() << "\n";
+                }
+            }
+        }
+    }
+    return false;
 }
+
 // llvm.dbg.value 没用
 char FuncPtrPass::ID = 0;
 static RegisterPass<FuncPtrPass> X("funcptrpass", "Print function call instruction");

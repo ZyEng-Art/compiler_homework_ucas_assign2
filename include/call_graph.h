@@ -46,17 +46,5 @@ public:
     std::map<Function *, CallFunc *> &get_call_funcs();
     ~Call_Graph();
 };
-struct Build_Call_Graph_Pass : public ModulePass {
-    static char ID;
-    Call_Graph call_graph;
-
-    Build_Call_Graph_Pass()
-        : ModulePass(ID) { }
-
-    bool runOnModule(Module &M) override;
-    void getAnalysisUsage(AnalysisUsage &AU) const override {
-        AU.setPreservesAll(); // 该 Pass 不修改 IR，仅作分析
-    }
-};
 
 #endif

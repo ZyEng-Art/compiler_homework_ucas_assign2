@@ -7,9 +7,7 @@ struct FuncPtrPass : public ModulePass {
     FuncPtrPass()
         : ModulePass(ID) { }
     bool can_execuate(llvm::PHINode phiInstr, llvm::Value *operand, llvm::BasicBlock instr_block);
-    void analysis(llvm::CallInst *callInst);
     bool runOnModule(Module &M) override;
-    void getAnalysisUsage(AnalysisUsage &AU) const override;
 };
 
 #endif

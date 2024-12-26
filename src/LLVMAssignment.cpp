@@ -51,8 +51,6 @@ struct EnableFunctionOptPass : public FunctionPass {
 
 char EnableFunctionOptPass::ID = 0;
 
-
-
 static cl::opt<std::string>
     InputFilename(cl::Positional,
         cl::desc("<filename>.bc"),
@@ -64,7 +62,6 @@ int main(int argc, char **argv) {
     // Parse the command line to read the Inputfilename
     cl::ParseCommandLineOptions(argc, argv,
         "FuncPtrPass \n My first LLVM too which does not do much.\n");
-
     // Load the input module
     std::unique_ptr<Module> M = parseIRFile(InputFilename, Err, Context); // 从文件中加载Module
     if (!M) {
